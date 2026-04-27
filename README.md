@@ -1,14 +1,12 @@
 # Klipper-HA-Notify
 
-Sendet Push-Benachrichtigungen an ein iPhone/Android-Gerät via **Home Assistant** aus Klipper-Macros heraus.
+Klipper-Extra das Push-Benachrichtigungen an iPhone/Android via **Home Assistant** sendet — direkt als natives Klipper-Modul, ohne gcode_shell_command.
 
 ## Voraussetzungen
 
 - Klipper mit Moonraker (Standard-Voron-Setup)
-- [Home Assistant](https://www.home-assistant.io/) im lokalen Netzwerk
-- HA Companion App auf dem Smartphone
+- [Home Assistant](https://www.home-assistant.io/) im lokalen Netzwerk mit Companion App auf dem Smartphone
 - Python 3 auf dem Drucker-Pi (bereits vorhanden)
-- `gcode_shell_command` Klipper-Erweiterung (wird bei Bedarf automatisch installiert)
 
 ## Installation
 
@@ -21,16 +19,15 @@ bash install.sh
 
 Der Installer führt durch folgende Schritte:
 
-1. **gcode_shell_command** — prüft ob installiert, lädt es bei Bedarf nach (mit Bestätigung)
-2. **HA-URL** — erkennt `homeassistant.local` automatisch, muss bestätigt werden
+1. **Klipper-Extra** — erstellt Symlink `~/klipper/klippy/extras/notify_ha.py → ~/Klipper-HA-Notify/notify_ha.py`
+2. **HA-URL** — erkennt `homeassistant.local` automatisch, Bestätigung durch User
 3. **Token** — Long-Lived Access Token aus HA (Profil → Sicherheit → Langlebige Zugriffstoken)
-4. **Notify-Service** — Liste aus HA oder manuelle Eingabe
-5. **Dateien** — kopiert Script und Config, trägt Include in `printer.cfg` ein
-6. **Firmware-Neustart** — optional, direkt über Moonraker
+4. **Notify-Service** — Auswahl aus HA-Liste oder manuelle Eingabe
+5. **Konfiguration** — schreibt Secrets-Datei, trägt Include in `printer.cfg` ein
+6. **Moonraker update_manager** — optional, ermöglicht automatische Updates über Mainsail/Fluidd
+7. **Firmware-Neustart** — optional, direkt über Moonraker
 
 ## Verwendung
-
-Nach der Installation steht das `NOTIFY`-Macro in allen Klipper-Macros zur Verfügung:
 
 ```
 NOTIFY TITLE="Drucker" MESSAGE="Druck fertig"
@@ -59,24 +56,30 @@ gcode:
 
 ## Installierte Dateien
 
-| Datei | Pfad |
-|-------|------|
-| Python-Script | `~/printer_data/scripts/notify_ha.py` |
-| Klipper-Config | `~/printer_data/config/ha_notify.cfg` |
-| Include | in `~/printer_data/config/printer.cfg` eingetragen |
+| Datei | Pfad | Beschreibung |
+|-------|------|--------------|
+| Script | `~/Klipper-HA-Notify/notify_ha.py` | Klipper-Extra im Repo |
+| Symlink | `~/klipper/klippy/extras/notify_ha.py` | Von Klipper geladen |
+| Konfiguration | `~/printer_data/scripts/klipper_ha_notify.conf` | Secrets (nicht im Repo) |
+| Config | `~/Klipper-HA-Notify/ha_notify.cfg` | Lädt das Extra (`[notify_ha]`) |
+| Include | in `~/printer_data/config/printer.cfg` | eingetragen durch install.sh |
 
 ## Aktualisieren
 
+Updates werden automatisch über Mainsail/Fluidd eingespielt (wenn update_manager aktiviert). Der Symlink sorgt dafür, dass Klipper nach dem nächsten Neustart automatisch die neue Version verwendet.
+
+Manuell:
 ```bash
-cd ~/Klipper-HA-Notify
-git pull
-bash install.sh
+cd ~/Klipper-HA-Notify && git pull
 ```
+Anschließend Firmware-Neustart in Mainsail/Fluidd.
 
 ## Deinstallieren
 
 ```bash
-rm ~/printer_data/scripts/notify_ha.py
-rm ~/printer_data/config/ha_notify.cfg
-# [include ha_notify.cfg] aus printer.cfg entfernen
+rm ~/klipper/klippy/extras/notify_ha.py
+rm ~/printer_data/scripts/klipper_ha_notify.conf
+rm -rf ~/Klipper-HA-Notify
+# [include ~/Klipper-HA-Notify/ha_notify.cfg] aus printer.cfg entfernen
+# [update_manager Klipper-HA-Notify] aus moonraker.conf entfernen
 ```

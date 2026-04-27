@@ -7,12 +7,14 @@ YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 KLIPPER_EXTRAS="${HOME}/klipper/klippy/extras"
 CONFIG_DIR="${HOME}/printer_data/config"
 SCRIPTS_DIR="${HOME}/printer_data/scripts"
 PRINTER_CFG="${CONFIG_DIR}/printer.cfg"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SHELL_CMD_URL="https://raw.githubusercontent.com/dw-0/kiauh/master/resources/gcode_shell_command.py"
+MOONRAKER_CFG="${CONFIG_DIR}/moonraker.conf"
+NOTIFY_CONF="${SCRIPTS_DIR}/klipper_ha_notify.conf"
+REPO_URL="https://github.com/Eifel-Joe/Klipper-HA-Notify.git"
 
 echo ""
 echo -e "${CYAN}════════════════════════════════════════${NC}"
@@ -20,36 +22,27 @@ echo -e "${CYAN}   Klipper-HA-Notify Installer          ${NC}"
 echo -e "${CYAN}════════════════════════════════════════${NC}"
 echo ""
 
-# ── Schritt 1: gcode_shell_command ───────────────────────────────────────
-echo -e "${CYAN}── Schritt 1: gcode_shell_command ──────${NC}"
-if [ -f "${KLIPPER_EXTRAS}/gcode_shell_command.py" ]; then
-    echo -e "${GREEN}✓ gcode_shell_command ist bereits installiert${NC}"
+# ── Schritt 1: Klipper-Extra Symlink ─────────────────────────────────────
+echo -e "${CYAN}── Schritt 1: Klipper-Extra einbinden ──${NC}"
+echo ""
+
+if [ ! -d "${KLIPPER_EXTRAS}" ]; then
+    echo -e "  ${RED}Fehler: Klipper-Verzeichnis nicht gefunden: ${KLIPPER_EXTRAS}${NC}"
+    echo "  Ist Klipper korrekt installiert?"
+    exit 1
+fi
+
+SYMLINK_TARGET="${KLIPPER_EXTRAS}/notify_ha.py"
+if [ -L "${SYMLINK_TARGET}" ]; then
+    echo -e "  ${GREEN}✓ Symlink bereits vorhanden${NC}"
+elif [ -f "${SYMLINK_TARGET}" ]; then
+    echo -e "  ${YELLOW}⚠ notify_ha.py existiert bereits (keine Symlink). Wird ersetzt.${NC}"
+    rm "${SYMLINK_TARGET}"
+    ln -s "${REPO_DIR}/notify_ha.py" "${SYMLINK_TARGET}"
+    echo -e "  ${GREEN}✓ Symlink erstellt${NC}"
 else
-    echo -e "${YELLOW}⚠ gcode_shell_command ist nicht installiert.${NC}"
-    echo ""
-    echo "  Diese Klipper-Erweiterung wird benötigt, um Shell-Scripts aus"
-    echo "  GCode-Macros heraus aufzurufen. Sie wird direkt von GitHub"
-    echo "  (KIAUH-Projekt) heruntergeladen:"
-    echo ""
-    echo "  ${SHELL_CMD_URL}"
-    echo ""
-    read -p "  Jetzt herunterladen und installieren? [j/N] " confirm
-    if [[ ! "$confirm" =~ ^[jJyY]$ ]]; then
-        echo ""
-        echo -e "${RED}Installation abgebrochen.${NC}"
-        echo ""
-        echo "  gcode_shell_command wird zwingend benötigt."
-        echo "  Installiere es manuell über KIAUH (Option 4 → Extras)"
-        echo "  oder lade die Datei selbst herunter:"
-        echo "  ${SHELL_CMD_URL}"
-        echo "  → ${KLIPPER_EXTRAS}/gcode_shell_command.py"
-        echo ""
-        exit 1
-    fi
-    echo ""
-    echo "  Lade herunter..."
-    curl -fsSL -o "${KLIPPER_EXTRAS}/gcode_shell_command.py" "${SHELL_CMD_URL}"
-    echo -e "${GREEN}✓ gcode_shell_command installiert${NC}"
+    ln -s "${REPO_DIR}/notify_ha.py" "${SYMLINK_TARGET}"
+    echo -e "  ${GREEN}✓ Symlink erstellt: ${SYMLINK_TARGET}${NC}"
 fi
 
 echo ""
@@ -58,7 +51,6 @@ echo ""
 echo -e "${CYAN}── Schritt 2: Home Assistant URL ───────${NC}"
 echo ""
 
-# Versuche homeassistant.local aufzulösen
 DETECTED_HOST=""
 if ping -c1 -W2 homeassistant.local &>/dev/null 2>&1; then
     DETECTED_HOST="homeassistant.local"
@@ -70,20 +62,19 @@ read -p "  Hostname / IP-Adresse [${DEFAULT_HOST}]: " input_host
 HA_HOST="${input_host:-$DETECTED_HOST}"
 
 if [ -z "$HA_HOST" ]; then
-    echo -e "${RED}Fehler: Kein Hostname eingegeben. Abbruch.${NC}"
+    echo -e "  ${RED}Fehler: Kein Hostname eingegeben. Abbruch.${NC}"
     exit 1
 fi
 
 read -p "  Port [8123]: " input_port
 HA_PORT="${input_port:-8123}"
-
 HA_URL="http://${HA_HOST}:${HA_PORT}"
+
 echo ""
 echo "  Verwende: ${HA_URL}"
 echo ""
 read -p "  Korrekt? [J/n] " confirm
 if [[ "$confirm" =~ ^[nN]$ ]]; then
-    echo ""
     echo "  Bitte starte den Installer neu und korrigiere die Angaben."
     exit 1
 fi
@@ -100,11 +91,11 @@ read -s -p "  Token (Eingabe wird nicht angezeigt): " HA_TOKEN
 echo ""
 
 if [ -z "$HA_TOKEN" ]; then
-    echo -e "${RED}Fehler: Kein Token eingegeben. Abbruch.${NC}"
+    echo -e "  ${RED}Fehler: Kein Token eingegeben. Abbruch.${NC}"
     exit 1
 fi
 
-echo -e "${GREEN}  ✓ Token übernommen${NC}"
+echo -e "  ${GREEN}✓ Token übernommen${NC}"
 echo ""
 
 # ── Schritt 4: Notify-Service ─────────────────────────────────────────────
@@ -127,8 +118,7 @@ if [ "$service_choice" = "1" ]; then
         "${HA_URL}/api/services" 2>/dev/null || echo "")
 
     if [ -z "$services_raw" ]; then
-        echo -e "  ${YELLOW}⚠ HA nicht erreichbar oder Token ungültig.${NC}"
-        echo "  Bitte Service-Namen manuell eingeben."
+        echo -e "  ${YELLOW}⚠ HA nicht erreichbar oder Token ungültig. Bitte manuell eingeben.${NC}"
         read -p "  Service-Name (z.B. mobile_app_iphone): " HA_SERVICE
     else
         mapfile -t services < <(echo "$services_raw" | python3 -c "
@@ -145,8 +135,8 @@ except Exception:
 " 2>/dev/null)
 
         if [ ${#services[@]} -eq 0 ]; then
-            echo -e "  ${YELLOW}⚠ Keine mobile_app_* Services gefunden.${NC}"
-            read -p "  Service-Namen manuell eingeben: " HA_SERVICE
+            echo -e "  ${YELLOW}⚠ Keine mobile_app_* Services gefunden. Bitte manuell eingeben.${NC}"
+            read -p "  Service-Name: " HA_SERVICE
         else
             echo ""
             echo "  Verfügbare Notify-Services:"
@@ -172,64 +162,89 @@ else
 fi
 
 if [ -z "$HA_SERVICE" ]; then
-    echo -e "${RED}Fehler: Kein Service ausgewählt. Abbruch.${NC}"
+    echo -e "  ${RED}Fehler: Kein Service ausgewählt. Abbruch.${NC}"
     exit 1
 fi
 
-echo -e "${GREEN}  ✓ Service: ${HA_SERVICE}${NC}"
+echo -e "  ${GREEN}✓ Service: ${HA_SERVICE}${NC}"
 echo ""
 
-# ── Schritt 5: Dateien installieren ──────────────────────────────────────
-echo -e "${CYAN}── Schritt 5: Dateien installieren ─────${NC}"
+# ── Schritt 5: Konfiguration und Include ─────────────────────────────────
+echo -e "${CYAN}── Schritt 5: Konfiguration schreiben ──${NC}"
 echo ""
 
 mkdir -p "${SCRIPTS_DIR}"
 
-# notify_ha.py mit gesetzten Werten schreiben
-sed -e "s|PLACEHOLDER_HA_URL|${HA_URL}|g" \
-    -e "s|PLACEHOLDER_HA_TOKEN|${HA_TOKEN}|g" \
-    -e "s|PLACEHOLDER_HA_SERVICE|${HA_SERVICE}|g" \
-    "${SCRIPT_DIR}/notify_ha.py" > "${SCRIPTS_DIR}/notify_ha.py"
-chmod +x "${SCRIPTS_DIR}/notify_ha.py"
-echo -e "${GREEN}  ✓ notify_ha.py  →  ${SCRIPTS_DIR}/notify_ha.py${NC}"
-
-# ha_notify.cfg kopieren
-cp "${SCRIPT_DIR}/ha_notify.cfg" "${CONFIG_DIR}/ha_notify.cfg"
-echo -e "${GREEN}  ✓ ha_notify.cfg  →  ${CONFIG_DIR}/ha_notify.cfg${NC}"
+# Secrets-Datei schreiben (liegt außerhalb des Repos)
+cat > "${NOTIFY_CONF}" << CONF
+# Klipper-HA-Notify Konfiguration
+# Generiert von install.sh — nicht in Git committen
+HA_URL=${HA_URL}
+HA_TOKEN=${HA_TOKEN}
+HA_SERVICE=${HA_SERVICE}
+CONF
+chmod 600 "${NOTIFY_CONF}"
+echo -e "  ${GREEN}✓ Konfiguration  →  ${NOTIFY_CONF}${NC}"
 
 # Include in printer.cfg eintragen
-if grep -q "ha_notify.cfg" "${PRINTER_CFG}" 2>/dev/null; then
-    echo -e "${GREEN}  ✓ Include bereits in printer.cfg vorhanden${NC}"
-elif grep -qE "^\[include \*\.cfg\]" "${PRINTER_CFG}" 2>/dev/null; then
-    echo -e "${GREEN}  ✓ Wildcard-Include [include *.cfg] erkannt — ha_notify.cfg wird automatisch geladen${NC}"
+INCLUDE_LINE="[include ~/Klipper-HA-Notify/ha_notify.cfg]"
+if grep -qF "ha_notify.cfg" "${PRINTER_CFG}" 2>/dev/null; then
+    echo -e "  ${GREEN}✓ Include bereits in printer.cfg vorhanden${NC}"
 else
-    # Nach der letzten [include ...]-Zeile einfügen
     if grep -q "^\[include" "${PRINTER_CFG}" 2>/dev/null; then
-        last_include_line=$(grep -n "^\[include" "${PRINTER_CFG}" | tail -1 | cut -d: -f1)
-        sed -i "${last_include_line}a [include ha_notify.cfg]" "${PRINTER_CFG}"
+        last_line=$(grep -n "^\[include" "${PRINTER_CFG}" | tail -1 | cut -d: -f1)
+        sed -i "${last_line}a ${INCLUDE_LINE}" "${PRINTER_CFG}"
     else
-        sed -i "1i [include ha_notify.cfg]\n" "${PRINTER_CFG}"
+        sed -i "1i ${INCLUDE_LINE}" "${PRINTER_CFG}"
     fi
-    echo -e "${GREEN}  ✓ [include ha_notify.cfg] in printer.cfg eingetragen${NC}"
+    echo -e "  ${GREEN}✓ Include in printer.cfg eingetragen${NC}"
 fi
 
 echo ""
 
-# ── Schritt 6: Firmware-Neustart ─────────────────────────────────────────
-echo -e "${CYAN}── Schritt 6: Firmware-Neustart ────────${NC}"
+# ── Schritt 6: Moonraker update_manager ──────────────────────────────────
+echo -e "${CYAN}── Schritt 6: Moonraker update_manager ─${NC}"
 echo ""
-echo -e "  ${YELLOW}⚠ Ein Firmware-Neustart ist erforderlich, damit Klipper die neuen${NC}"
-echo -e "  ${YELLOW}  Dateien lädt. Ohne Neustart ist NOTIFY nicht verfügbar.${NC}"
+echo "  Ein update_manager-Eintrag ermöglicht automatische Updates"
+echo "  über Mainsail/Fluidd direkt aus dem GitHub-Repo."
+echo ""
+read -p "  Eintrag in moonraker.conf hinzufügen? [J/n] " moonraker_confirm
+if [[ ! "$moonraker_confirm" =~ ^[nN]$ ]]; then
+    if grep -q "Klipper-HA-Notify" "${MOONRAKER_CFG}" 2>/dev/null; then
+        echo -e "  ${GREEN}✓ update_manager-Eintrag bereits vorhanden${NC}"
+    else
+        cat >> "${MOONRAKER_CFG}" << EOF
+
+[update_manager Klipper-HA-Notify]
+type: git_repo
+path: ~/Klipper-HA-Notify
+origin: ${REPO_URL}
+primary_branch: master
+is_system_service: False
+managed_services: klipper
+EOF
+        echo -e "  ${GREEN}✓ update_manager in moonraker.conf eingetragen${NC}"
+    fi
+else
+    echo "  Übersprungen — Updates müssen manuell per git pull eingespielt werden."
+fi
+
+echo ""
+
+# ── Schritt 7: Firmware-Neustart ─────────────────────────────────────────
+echo -e "${CYAN}── Schritt 7: Firmware-Neustart ────────${NC}"
+echo ""
+echo -e "  ${YELLOW}⚠ Ein Firmware-Neustart ist erforderlich, damit Klipper das neue${NC}"
+echo -e "  ${YELLOW}  Extra lädt. Ohne Neustart ist NOTIFY nicht verfügbar.${NC}"
 echo ""
 read -p "  Firmware-Neustart jetzt auslösen (via Moonraker)? [j/N] " restart_confirm
 if [[ "$restart_confirm" =~ ^[jJyY]$ ]]; then
     if curl -s -X POST http://localhost:7125/printer/firmware_restart > /dev/null 2>&1; then
-        echo -e "${GREEN}  ✓ Firmware-Neustart ausgelöst${NC}"
+        echo -e "  ${GREEN}✓ Firmware-Neustart ausgelöst${NC}"
     else
-        echo -e "${YELLOW}  ⚠ Moonraker nicht erreichbar — bitte manuell neu starten${NC}"
+        echo -e "  ${YELLOW}⚠ Moonraker nicht erreichbar — bitte manuell neu starten${NC}"
     fi
 else
-    echo ""
     echo "  Bitte führe in Mainsail oder Fluidd manuell einen Firmware-Neustart durch."
 fi
 
