@@ -105,6 +105,13 @@ status_printer_cfg_include() {
     else echo "missing"; fi
 }
 
+status_conf_perms() {
+    [ -f "${NOTIFY_CONF}" ] || { echo "no_file"; return; }
+    local perms; perms="$(stat -c "%a" "${NOTIFY_CONF}" 2>/dev/null || echo "unknown")"
+    if [ "${perms}" = "600" ]; then echo "ok"
+    else echo "insecure:${perms}"; fi
+}
+
 status_moonraker() {
     [ -f "${MOONRAKER_CONF}" ] || { echo "no_moonraker"; return; }
     if grep -qE '^\s*\[update_manager\s+Klipper-HA-Notify\]' "${MOONRAKER_CONF}"; then echo "present"
@@ -141,6 +148,13 @@ case "${S_CONF}" in
     missing)         miss "Konfiguration fehlt: ${NOTIFY_CONF}" ;;
 esac
 
+S_PERMS="$(status_conf_perms)"
+case "${S_PERMS}" in
+    ok)          ok  "Secrets-Datei gesichert (chmod 600)" ;;
+    insecure:*)  warn "Secrets-Datei unsicher (${S_PERMS#insecure:}) — enthält HA-Token, wird auf 600 korrigiert" ;;
+    no_file)     : ;;
+esac
+
 S_INC="$(status_printer_cfg_include)"
 case "${S_INC}" in
     present)         ok  "printer.cfg enthält [include ha_notify.cfg]" ;;
@@ -154,6 +168,12 @@ case "${S_MR}" in
     missing)         miss "moonraker.conf: [update_manager Klipper-HA-Notify] fehlt (optional)" ;;
     no_moonraker)    warn "${MOONRAKER_CONF} nicht gefunden (Update-Manager übersprungen)" ;;
 esac
+
+# Berechtigungen automatisch korrigieren — erfordert keinen Klipper-Neustart
+if [[ "${S_PERMS}" == insecure:* ]]; then
+    chmod 600 "${NOTIFY_CONF}"
+    ok "Berechtigungen korrigiert: ${NOTIFY_CONF} (jetzt 600)"
+fi
 
 echo ""
 hr
