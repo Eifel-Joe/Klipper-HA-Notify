@@ -58,7 +58,7 @@ gcode:
 
 | Datei | Pfad | Beschreibung |
 |-------|------|--------------|
-| Script | `~/Klipper-HA-Notify/notify_ha.py` | Klipper-Extra im Repo |
+| Script | `~/Klipper-HA-Notify/klipper_extras/notify_ha.py` | Klipper-Extra im Repo |
 | Symlink | `~/klipper/klippy/extras/notify_ha.py` | Von Klipper geladen |
 | Konfiguration | `~/printer_data/scripts/klipper_ha_notify.conf` | Secrets (nicht im Repo) |
 | Config | `~/Klipper-HA-Notify/ha_notify.cfg` | Lädt das Extra (`[notify_ha]`) |

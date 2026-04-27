@@ -21,7 +21,7 @@ KLIPPER_SERVICE="${KLIPPER_SERVICE:-klipper}"
 REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_URL="https://github.com/Eifel-Joe/Klipper-HA-Notify.git"
 
-EXT_SOURCE="${REPO_DIR}/notify_ha.py"
+EXT_SOURCE="${REPO_DIR}/klipper_extras/notify_ha.py"
 EXT_TARGET="${KLIPPER_DIR}/klippy/extras/notify_ha.py"
 NOTIFY_CONF="${SCRIPTS_DIR}/klipper_ha_notify.conf"
 PRINTER_CFG="${PRINTER_CFG_DIR}/printer.cfg"
