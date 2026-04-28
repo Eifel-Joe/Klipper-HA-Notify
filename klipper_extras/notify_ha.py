@@ -25,6 +25,8 @@ class NotifyHA:
         self.ha_url   = ""
         self.ha_token = ""
         self.ha_service = ""
+        _name = config.get('printer_name', None)
+        self.printer_name = _name.strip() if _name else "Drucker"
         self._load_conf()
         self.gcode.register_command(
             'NOTIFY', self.cmd_NOTIFY, desc=self.cmd_NOTIFY_help
@@ -51,7 +53,7 @@ class NotifyHA:
     cmd_NOTIFY_help = "Push-Benachrichtigung via Home Assistant senden"
 
     def cmd_NOTIFY(self, gcmd):
-        title   = gcmd.get('TITLE',   "Drucker")
+        title   = gcmd.get('TITLE',   self.printer_name)
         message = gcmd.get('MESSAGE', "")
         threading.Thread(
             target=self._send, args=(title, message), daemon=True

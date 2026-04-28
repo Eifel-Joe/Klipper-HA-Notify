@@ -20,11 +20,11 @@ bash install.sh
 Der Installer zeigt zunächst den aktuellen Installationsstatus aller Komponenten und führt dann die gewählten Schritte aus. Alle Schritte sind idempotent — ein erneutes Ausführen ist sicher.
 
 1. **Klipper-Extra** — erstellt Symlink `~/klipper/klippy/extras/notify_ha.py → ~/Klipper-HA-Notify/klipper_extras/notify_ha.py`
-2. **ha_notify.cfg** — kopiert die Konfigurationsdatei nach `~/printer_data/config/ha_notify.cfg`
+2. **ha_notify.cfg** — fragt den Druckernamen ab und schreibt `~/printer_data/config/ha_notify.cfg`
 3. **Secrets** — fragt HA-URL, Token und Notify-Service interaktiv ab; schreibt die Secrets-Datei mit `chmod 600`
 4. **printer.cfg Include** — trägt `[include ha_notify.cfg]` ein (SAVE_CONFIG-Block-sicher)
 5. **Moonraker update_manager** — optional, ermöglicht automatische Updates über Mainsail/Fluidd
-6. **Klipper-Neustart** — optional, via `sudo systemctl restart klipper`
+6. **Neustart** — optional, Klipper und ggf. Moonraker via `sudo systemctl restart`
 
 Existiert die Secrets-Datei bereits mit falschen Berechtigungen, korrigiert der Installer sie automatisch auf `600`.
 
@@ -48,7 +48,7 @@ Das Script öffnet ein Menü zum Ändern einzelner Werte:
 NOTIFY TITLE="Drucker" MESSAGE="Druck fertig"
 ```
 
-Beide Parameter sind optional. Ohne `TITLE` wird `"Drucker"` verwendet.
+Beide Parameter sind optional. Ohne `TITLE` wird der bei der Installation eingetragene Druckername verwendet (Fallback: `"Drucker"`).
 
 ### Beispiel: Integration in eigene Macros
 
@@ -81,7 +81,7 @@ Sowohl `install.sh` als auch `update_ha.sh` prüfen die Berechtigungen beim Star
 |-------|------|--------------|
 | Script | `~/Klipper-HA-Notify/klipper_extras/notify_ha.py` | Klipper-Extra im Repo |
 | Symlink | `~/klipper/klippy/extras/notify_ha.py` | Von Klipper geladen |
-| Config | `~/printer_data/config/ha_notify.cfg` | Kopiert durch install.sh; lädt das Extra (`[notify_ha]`) |
+| Config | `~/printer_data/config/ha_notify.cfg` | Generiert durch install.sh; lädt das Extra und setzt den Druckernamen |
 | Secrets | `~/printer_data/scripts/klipper_ha_notify.conf` | `chmod 600`, nicht im Repo |
 | Include | in `~/printer_data/config/printer.cfg` | `[include ha_notify.cfg]`, eingetragen durch install.sh |
 

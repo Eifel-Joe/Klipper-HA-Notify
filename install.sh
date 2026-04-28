@@ -102,8 +102,9 @@ status_conf_perms() {
 }
 
 status_cfg_file() {
-    if [ -f "${CFG_TARGET}" ]; then echo "present"
-    else echo "missing"; fi
+    [ -f "${CFG_TARGET}" ] || { echo "missing"; return; }
+    if grep -qE '^printer_name:' "${CFG_TARGET}" 2>/dev/null; then echo "present"
+    else echo "no_name"; fi
 }
 
 status_moonraker() {
@@ -242,7 +243,8 @@ esac
 
 S_CFG="$(status_cfg_file)"
 case "${S_CFG}" in
-    present)  ok  "ha_notify.cfg vorhanden: ${CFG_TARGET}" ;;
+    present)  ok   "ha_notify.cfg vorhanden: ${CFG_TARGET}" ;;
+    no_name)  warn "ha_notify.cfg vorhanden, Druckername fehlt: ${CFG_TARGET}" ;;
     missing)  miss "ha_notify.cfg fehlt: ${CFG_TARGET}" ;;
 esac
 
@@ -306,9 +308,26 @@ if want "${S_EXT}" "Extension-Symlink ${EXT_TARGET} anlegen/korrigieren"; then
     ACTIONS="${ACTIONS} ext"
 fi
 
-# 2) ha_notify.cfg nach printer_data/config kopieren
-if want "${S_CFG}" "ha_notify.cfg nach ${CFG_TARGET} kopieren"; then
+# 2) ha_notify.cfg nach printer_data/config schreiben (inkl. Druckername)
+PRINTER_NAME=""
+CFG_NEEDED=0
+if want "${S_CFG}" "ha_notify.cfg nach ${CFG_TARGET} schreiben"; then
+    CFG_NEEDED=1
     ACTIONS="${ACTIONS} cfg"
+fi
+
+if [ "${CFG_NEEDED}" = "1" ]; then
+    echo ""
+    # Bestehenden Namen als Default laden
+    _existing_name=""
+    if [ -f "${CFG_TARGET}" ]; then
+        _existing_name="$(grep '^printer_name:' "${CFG_TARGET}" | cut -d: -f2- | sed 's/^[[:space:]]*//' || true)"
+    fi
+    _default_name="${_existing_name:-Drucker}"
+    printf '  Druckername für Benachrichtigungen (Enter = %s): ' "${_default_name}"
+    read -r _pname || _pname=""
+    PRINTER_NAME="${_pname:-${_default_name}}"
+    ok "Druckername: ${PRINTER_NAME}"
 fi
 
 # 3) Konfiguration (Secrets — immer interaktiv)
@@ -529,8 +548,15 @@ echo ""
 for _ACT in ${ACTIONS}; do
     case "${_ACT}" in
         cfg)
-            cp "${CFG_SOURCE}" "${CFG_TARGET}"
-            ok "ha_notify.cfg kopiert: ${CFG_TARGET}"
+            mkdir -p "${PRINTER_CFG_DIR}"
+            cat > "${CFG_TARGET}" << HACFG
+## Klipper-HA-Notify — generiert durch install.sh
+## https://github.com/Eifel-Joe/Klipper-HA-Notify
+
+[notify_ha]
+printer_name: ${PRINTER_NAME}
+HACFG
+            ok "ha_notify.cfg geschrieben: ${CFG_TARGET}"
             ;;
         ext)
             if [ -e "${EXT_TARGET}" ] && [ ! -L "${EXT_TARGET}" ]; then
