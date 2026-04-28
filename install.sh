@@ -23,10 +23,12 @@ REPO_URL="https://github.com/Eifel-Joe/Klipper-HA-Notify.git"
 
 EXT_SOURCE="${REPO_DIR}/klipper_extras/notify_ha.py"
 EXT_TARGET="${KLIPPER_DIR}/klippy/extras/notify_ha.py"
+CFG_SOURCE="${REPO_DIR}/ha_notify.cfg"
+CFG_TARGET="${PRINTER_CFG_DIR}/ha_notify.cfg"
 NOTIFY_CONF="${SCRIPTS_DIR}/klipper_ha_notify.conf"
 PRINTER_CFG="${PRINTER_CFG_DIR}/printer.cfg"
-INCLUDE_LINE="[include ~/Klipper-HA-Notify/ha_notify.cfg]"
-INCLUDE_PATTERN='^\s*\[include[[:space:]]*~/Klipper-HA-Notify/ha_notify\.cfg\]'
+INCLUDE_LINE="[include ha_notify.cfg]"
+INCLUDE_PATTERN='^\s*\[include[[:space:]]*ha_notify\.cfg\]'
 
 # ---------- Farben ----------
 if [ -t 1 ]; then
@@ -98,6 +100,11 @@ status_conf_perms() {
     else echo "insecure:${perms}"; fi
 }
 
+status_cfg_file() {
+    if [ -f "${CFG_TARGET}" ]; then echo "present"
+    else echo "missing"; fi
+}
+
 status_moonraker() {
     [ -f "${MOONRAKER_CONF}" ] || { echo "no_moonraker"; return; }
     if grep -qE '^\s*\[update_manager\s+Klipper-HA-Notify\]' "${MOONRAKER_CONF}"; then echo "present"
@@ -143,6 +150,12 @@ case "${S_EXT}" in
     missing)         miss "Extension-Symlink fehlt: ${EXT_TARGET}" ;;
     wrong_symlink:*) warn "Extension-Symlink zeigt auf ${S_EXT#wrong_symlink:} (erwartet: ${EXT_SOURCE})" ;;
     regular_file)    warn "${EXT_TARGET} existiert als normale Datei (kein Symlink)" ;;
+esac
+
+S_CFG="$(status_cfg_file)"
+case "${S_CFG}" in
+    present)  ok  "ha_notify.cfg vorhanden: ${CFG_TARGET}" ;;
+    missing)  miss "ha_notify.cfg fehlt: ${CFG_TARGET}" ;;
 esac
 
 S_CONF="$(status_conf)"
@@ -205,7 +218,12 @@ if want "${S_EXT}" "Extension-Symlink ${EXT_TARGET} anlegen/korrigieren"; then
     ACTIONS="${ACTIONS} ext"
 fi
 
-# 2) Konfiguration (Secrets — immer interaktiv)
+# 2) ha_notify.cfg nach printer_data/config kopieren
+if want "${S_CFG}" "ha_notify.cfg nach ${CFG_TARGET} kopieren"; then
+    ACTIONS="${ACTIONS} cfg"
+fi
+
+# 3) Konfiguration (Secrets — immer interaktiv)
 #    want() bestimmt ob wir konfigurieren; die eigentliche Eingabe ist immer interaktiv.
 HA_URL="" HA_TOKEN="" HA_SERVICE=""
 CONF_NEEDED=0
@@ -373,12 +391,12 @@ except Exception:
     ACTIONS="${ACTIONS} conf"
 fi
 
-# 3) printer.cfg Include
+# 4) printer.cfg Include
 if [ -f "${PRINTER_CFG}" ] && want "${S_INC}" "[include ha_notify.cfg] in printer.cfg eintragen"; then
     ACTIONS="${ACTIONS} inc"
 fi
 
-# 4) Moonraker update_manager (optional — auch im AUTO_ALL-Modus immer fragen)
+# 5) Moonraker update_manager (optional — auch im AUTO_ALL-Modus immer fragen)
 if [ "${S_MR}" != "no_moonraker" ] && [ "${S_MR}" != "present" ]; then
     echo ""
     if ask_yn "[update_manager Klipper-HA-Notify] in moonraker.conf ergänzen (optional, für Auto-Update)" n; then
@@ -411,6 +429,10 @@ echo ""
 
 for _ACT in ${ACTIONS}; do
     case "${_ACT}" in
+        cfg)
+            cp "${CFG_SOURCE}" "${CFG_TARGET}"
+            ok "ha_notify.cfg kopiert: ${CFG_TARGET}"
+            ;;
         ext)
             if [ -e "${EXT_TARGET}" ] && [ ! -L "${EXT_TARGET}" ]; then
                 warn "${EXT_TARGET} ist eine normale Datei. Backup: ${EXT_TARGET}.bak"
@@ -491,6 +513,7 @@ hr
 say "Was gemacht wurde:"
 for _ACT in ${ACTIONS}; do
     case "${_ACT}" in
+        cfg)  say "  - ha_notify.cfg kopiert: ${CFG_TARGET}" ;;
         ext)  say "  - Extension-Symlink: ${EXT_TARGET} → ${EXT_SOURCE}" ;;
         conf) say "  - Konfiguration geschrieben: ${NOTIFY_CONF}" ;;
         inc)  say "  - [include ha_notify.cfg] in printer.cfg eingetragen (Backup: ${PRINTER_CFG}.bak.*)" ;;
