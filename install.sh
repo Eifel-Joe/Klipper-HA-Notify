@@ -111,6 +111,92 @@ status_moonraker() {
     else echo "missing"; fi
 }
 
+# ---------- Test-Benachrichtigung + Diagnose ----------
+# Aufruf: notify_test_and_diagnose <url> <token> <service>
+# service darf mit oder ohne "notify."-Präfix übergeben werden.
+notify_test_and_diagnose() {
+    local url="$1" token="$2" service="$3"
+    local svc_name="${service#notify.}"
+
+    echo ""
+    say "  Sende Test-Benachrichtigung an ${C_CYAN}notify.${svc_name}${C_RESET}…"
+    local http_code
+    http_code="$(curl -s -o /dev/null -w "%{http_code}" -m 10 \
+        -X POST \
+        -H "Authorization: Bearer ${token}" \
+        -H "Content-Type: application/json" \
+        -d "{\"title\":\"Klipper-HA-Notify Test\",\"message\":\"Verbindungstest erfolgreich\"}" \
+        "${url%/}/api/services/notify/${svc_name}" 2>/dev/null || echo "000")"
+
+    case "${http_code}" in
+        200) ok "API-Antwort: HTTP 200 OK" ;;
+        401) warn "HTTP 401 — Token ungültig oder abgelaufen" ;;
+        404) warn "HTTP 404 — Service '${svc_name}' nicht gefunden" ;;
+        000) warn "Keine Verbindung zu ${url}" ;;
+        *)   warn "HTTP ${http_code}" ;;
+    esac
+
+    echo ""
+    printf '%b?%b Ist die Benachrichtigung auf dem Smartphone angekommen? [j/N]: ' "${C_CYAN}" "${C_RESET}"
+    read -r _arrived || _arrived="n"
+    case "${_arrived:-n}" in
+        [jJ]|[yY]|[jJ][aA]|[yY][eE][sS])
+            ok "Test erfolgreich."
+            return 0
+            ;;
+    esac
+
+    # Diagnose
+    echo ""
+    warn "Test nicht bestätigt — Diagnose:"
+    echo ""
+
+    # 1. HA erreichbar?
+    local api_code
+    api_code="$(curl -s -o /dev/null -w "%{http_code}" -m 5 "${url%/}/api/" 2>/dev/null || echo "000")"
+    if [ "${api_code}" = "000" ]; then
+        miss "Home Assistant unter ${url} nicht erreichbar."
+        say "       → URL und Port prüfen"
+        return 1
+    fi
+    ok "Home Assistant erreichbar (${url})"
+
+    # 2. Token gültig?
+    local auth_code
+    auth_code="$(curl -s -o /dev/null -w "%{http_code}" -m 5 \
+        -H "Authorization: Bearer ${token}" \
+        "${url%/}/api/" 2>/dev/null || echo "000")"
+    if [ "${auth_code}" = "401" ] || [ "${auth_code}" = "403" ]; then
+        miss "Token ungültig (HTTP ${auth_code})."
+        say "       → Neues Long-Lived Access Token in HA erstellen: Profil → Sicherheit → Langlebige Zugriffstoken"
+        return 1
+    fi
+    ok "Token gültig"
+
+    # 3. Service vorhanden?
+    local known_services
+    known_services="$(curl -sf -m 5 \
+        -H "Authorization: Bearer ${token}" \
+        "${url%/}/api/services" 2>/dev/null \
+        | grep -o '"domain":"notify"[^}]*"service":"[^"]*"' \
+        | grep -o '"service":"[^"]*"' | cut -d'"' -f4 | sort || true)"
+    if echo "${known_services}" | grep -qx "${svc_name}"; then
+        ok "Service '${svc_name}' in HA vorhanden"
+        say "       → Benachrichtigungsberechtigung in der Companion App prüfen"
+    else
+        miss "Service '${svc_name}' nicht in HA gefunden."
+        if [ -n "${known_services}" ]; then
+            say "       Verfügbare Notify-Services:"
+            echo "${known_services}" | while IFS= read -r _s; do
+                say "         notify.${_s}"
+            done
+        else
+            say "       → Keine Notify-Services gefunden. Companion App auf dem Gerät installiert?"
+        fi
+    fi
+    return 1
+}
+
 # ---------- Main (nur wenn direkt ausgeführt, nicht wenn gesourced) ----------
 
 if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
@@ -388,6 +474,11 @@ except Exception:
         fi
     fi
     ok "Service: ${HA_SERVICE}"
+
+    echo ""
+    hr
+    notify_test_and_diagnose "${HA_URL}" "${HA_TOKEN}" "${HA_SERVICE}" || true
+
     ACTIONS="${ACTIONS} conf"
 fi
 

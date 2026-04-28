@@ -67,6 +67,86 @@ detect_ha() {
     fi
 }
 
+# ── Test-Benachrichtigung + Diagnose ─────────────────────────────────────────
+# Aufruf: notify_test_and_diagnose <url> <token> <service>
+notify_test_and_diagnose() {
+    local url="$1" token="$2" service="$3"
+    local svc_name="${service#notify.}"
+
+    if [ -z "${url}" ] || [ -z "${token}" ] || [ -z "${svc_name}" ]; then
+        warn "Bitte zuerst URL, Token und Service vollständig konfigurieren."; return 1
+    fi
+
+    say ""
+    say "  Sende Test-Benachrichtigung an ${C_CYAN}notify.${svc_name}${C_RESET}…"
+    local http_code
+    http_code="$(curl -s -o /dev/null -w "%{http_code}" -m 10 \
+        -X POST \
+        -H "Authorization: Bearer ${token}" \
+        -H "Content-Type: application/json" \
+        -d "{\"title\":\"Klipper-HA-Notify Test\",\"message\":\"Verbindungstest erfolgreich\"}" \
+        "${url%/}/api/services/notify/${svc_name}" 2>/dev/null || echo "000")"
+
+    case "${http_code}" in
+        200) ok "API-Antwort: HTTP 200 OK" ;;
+        401) warn "HTTP 401 — Token ungültig oder abgelaufen" ;;
+        404) warn "HTTP 404 — Service '${svc_name}' nicht gefunden" ;;
+        000) warn "Keine Verbindung zu ${url}" ;;
+        *)   warn "HTTP ${http_code}" ;;
+    esac
+
+    say ""
+    printf '  Ist die Benachrichtigung auf dem Smartphone angekommen? [j/N]: '
+    read -r _arrived || _arrived="n"
+    case "${_arrived:-n}" in
+        [jJ]|[yY]|[jJ][aA]|[yY][eE][sS])
+            ok "Test erfolgreich."; return 0 ;;
+    esac
+
+    # Diagnose
+    say ""
+    warn "Test nicht bestätigt — Diagnose:"
+    say ""
+
+    local api_code
+    api_code="$(curl -s -o /dev/null -w "%{http_code}" -m 5 "${url%/}/api/" 2>/dev/null || echo "000")"
+    if [ "${api_code}" = "000" ]; then
+        err "Home Assistant unter ${url} nicht erreichbar."
+        say "     → URL und Port prüfen (Menüpunkt 1)"; return 1
+    fi
+    ok "Home Assistant erreichbar (${url})"
+
+    local auth_code
+    auth_code="$(curl -s -o /dev/null -w "%{http_code}" -m 5 \
+        -H "Authorization: Bearer ${token}" \
+        "${url%/}/api/" 2>/dev/null || echo "000")"
+    if [ "${auth_code}" = "401" ] || [ "${auth_code}" = "403" ]; then
+        err "Token ungültig (HTTP ${auth_code})."
+        say "     → Neues Long-Lived Access Token in HA erstellen (Menüpunkt 2)"; return 1
+    fi
+    ok "Token gültig"
+
+    local known_services
+    known_services="$(curl -sf -m 5 \
+        -H "Authorization: Bearer ${token}" \
+        "${url%/}/api/services" 2>/dev/null \
+        | grep -o '"domain":"notify"[^}]*"service":"[^"]*"' \
+        | grep -o '"service":"[^"]*"' | cut -d'"' -f4 | sort || true)"
+    if echo "${known_services}" | grep -qx "${svc_name}"; then
+        ok "Service '${svc_name}' in HA vorhanden"
+        say "     → Benachrichtigungsberechtigung in der Companion App prüfen"
+    else
+        err "Service '${svc_name}' nicht in HA gefunden."
+        if [ -n "${known_services}" ]; then
+            say "     Verfügbare Notify-Services:"
+            echo "${known_services}" | while IFS= read -r _s; do say "       notify.${_s}"; done
+        else
+            say "     → Keine Notify-Services gefunden. Companion App installiert und angemeldet?"
+        fi
+    fi
+    return 1
+}
+
 # ── Notify-Services aus HA-API abrufen ────────────────────────────────────────
 fetch_notify_services() {
     # Gibt Liste der verfügbaren notify.*-Services aus, je eine Zeile
@@ -120,6 +200,10 @@ change_connection() {
     HA_URL="http://${new_host}:${new_port}"
     say "  ${C_GREEN}Neue URL: ${HA_URL}${C_RESET}"
     write_conf
+    say ""
+    printf '  Test-Benachrichtigung senden? [J/n]: '
+    read -r _do_test || _do_test="j"
+    case "${_do_test:-j}" in [nN]) ;; *) notify_test_and_diagnose "${HA_URL}" "${HA_TOKEN}" "${HA_SERVICE}" || true ;; esac
 }
 
 # ── 2. Token ──────────────────────────────────────────────────────────────────
@@ -137,6 +221,10 @@ change_token() {
     HA_TOKEN="${_tok}"
     ok "Token aktualisiert."
     write_conf
+    say ""
+    printf '  Test-Benachrichtigung senden? [J/n]: '
+    read -r _do_test || _do_test="j"
+    case "${_do_test:-j}" in [nN]) ;; *) notify_test_and_diagnose "${HA_URL}" "${HA_TOKEN}" "${HA_SERVICE}" || true ;; esac
 }
 
 # ── 3. Notify-Service ─────────────────────────────────────────────────────────
@@ -205,6 +293,8 @@ change_service() {
 
     ok "Service gesetzt: ${HA_SERVICE}"
     write_conf
+    say ""
+    notify_test_and_diagnose "${HA_URL}" "${HA_TOKEN}" "${HA_SERVICE}" || true
 }
 
 # ════════════════════════════════════════════════════════════════════════════════
@@ -237,6 +327,7 @@ while true; do
     say "  1) Verbindung ändern (Host + Port)"
     say "  2) Token ändern"
     say "  3) Notify-Service ändern"
+    say "  4) Test-Benachrichtigung senden"
     say "  0) Beenden"
     say ""
     printf '  Auswahl: '
@@ -246,6 +337,7 @@ while true; do
         1) change_connection ;;
         2) change_token      ;;
         3) change_service    ;;
+        4) sep; say ""; notify_test_and_diagnose "${HA_URL}" "${HA_TOKEN}" "${HA_SERVICE}" || true ;;
         0) say ""; say "  Tschüss!"; say ""; break ;;
         *) warn "Ungültige Auswahl." ;;
     esac
