@@ -265,14 +265,14 @@ if [ "${CONF_NEEDED}" = "1" ]; then
     DEFAULT_HOST="${existing_host:-${DETECTED_HOST:-192.168.x.x}}"
     DEFAULT_PORT="${existing_port:-8123}"
 
-    printf '  Hostname / IP [%s]: ' "${DEFAULT_HOST}"
+    printf '  Hostname / IP (Enter = %s): ' "${DEFAULT_HOST}"
     read -r _host || _host=""
     HA_HOST="${_host:-${DEFAULT_HOST}}"
     if [ -z "${HA_HOST}" ] || [ "${HA_HOST}" = "192.168.x.x" ]; then
         say "${C_RED}Fehler: Kein Hostname eingegeben. Abbruch.${C_RESET}"
         exit 1
     fi
-    printf '  Port [%s]: ' "${DEFAULT_PORT}"
+    printf '  Port (Enter = %s): ' "${DEFAULT_PORT}"
     read -r _port || _port=""
     HA_PORT="${_port:-${DEFAULT_PORT}}"
     HA_URL="http://${HA_HOST}:${HA_PORT}"
