@@ -18,7 +18,7 @@ PRINTER_CFG_DIR="${PRINTER_CFG_DIR:-${HOME}/printer_data/config}"
 SCRIPTS_DIR="${SCRIPTS_DIR:-${HOME}/printer_data/scripts}"
 MOONRAKER_CONF="${MOONRAKER_CONF:-${PRINTER_CFG_DIR}/moonraker.conf}"
 KLIPPER_SERVICE="${KLIPPER_SERVICE:-klipper}"
-REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_DIR="${REPO_DIR:-$(cd "$(dirname "$0")" && pwd)}"
 REPO_URL="https://github.com/Eifel-Joe/Klipper-HA-Notify.git"
 
 EXT_SOURCE="${REPO_DIR}/klipper_extras/notify_ha.py"
@@ -53,20 +53,6 @@ ask_yn() {
     yn="${yn:-$default}"
     case "$yn" in [yY]|[yY][eE][sS]|[jJ]|[jJ][aA]) return 0 ;; *) return 1 ;; esac
 }
-
-# ---------- Preflight ----------
-
-if [ ! -f "${EXT_SOURCE}" ]; then
-    say "${C_RED}FEHLER:${C_RESET} ${EXT_SOURCE} nicht gefunden."
-    say "Script im Repo-Root ausführen."
-    exit 1
-fi
-
-if [ ! -d "${KLIPPER_DIR}/klippy/extras" ]; then
-    say "${C_RED}FEHLER:${C_RESET} ${KLIPPER_DIR}/klippy/extras existiert nicht."
-    say "Ist Klipper installiert? KLIPPER_DIR=<pfad> ./install.sh falls anderer Pfad."
-    exit 1
-fi
 
 # ---------- Status ermitteln ----------
 
@@ -117,6 +103,24 @@ status_moonraker() {
     if grep -qE '^\s*\[update_manager\s+Klipper-HA-Notify\]' "${MOONRAKER_CONF}"; then echo "present"
     else echo "missing"; fi
 }
+
+# ---------- Main (nur wenn direkt ausgeführt, nicht wenn gesourced) ----------
+
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+
+# ---------- Preflight ----------
+
+if [ ! -f "${EXT_SOURCE}" ]; then
+    say "${C_RED}FEHLER:${C_RESET} ${EXT_SOURCE} nicht gefunden."
+    say "Script im Repo-Root ausführen."
+    exit 1
+fi
+
+if [ ! -d "${KLIPPER_DIR}/klippy/extras" ]; then
+    say "${C_RED}FEHLER:${C_RESET} ${KLIPPER_DIR}/klippy/extras existiert nicht."
+    say "Ist Klipper installiert? KLIPPER_DIR=<pfad> ./install.sh falls anderer Pfad."
+    exit 1
+fi
 
 # ---------- Banner + Status ----------
 
@@ -491,3 +495,5 @@ echo ""
 say "${C_BOLD}Verwendung in Klipper-Macros:${C_RESET}"
 say '  NOTIFY TITLE="Drucker" MESSAGE="Druck fertig"'
 echo ""
+
+fi # end main
