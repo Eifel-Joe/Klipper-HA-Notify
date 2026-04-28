@@ -243,8 +243,15 @@ if [ "${CONF_NEEDED}" = "1" ]; then
     # ── HA-URL ──────────────────────────────────────────────────────────────
     DETECTED_HOST=""
     if ping -c1 -W2 homeassistant.local &>/dev/null 2>&1; then
-        DETECTED_HOST="homeassistant.local"
         say "  ${C_GREEN}Home Assistant gefunden unter: homeassistant.local${C_RESET}"
+        # IP-Adresse auflösen — robuster als mDNS-Hostname in der URL
+        _resolved="$(getent hosts homeassistant.local 2>/dev/null | awk '{print $1; exit}')"
+        if [ -n "${_resolved}" ]; then
+            DETECTED_HOST="${_resolved}"
+            say "  ${C_GREEN}IP-Adresse: ${_resolved}${C_RESET}"
+        else
+            DETECTED_HOST="homeassistant.local"
+        fi
     fi
 
     # Aus bestehender URL Host und Port extrahieren
