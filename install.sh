@@ -18,6 +18,7 @@ PRINTER_CFG_DIR="${PRINTER_CFG_DIR:-${HOME}/printer_data/config}"
 SCRIPTS_DIR="${SCRIPTS_DIR:-${HOME}/printer_data/scripts}"
 MOONRAKER_CONF="${MOONRAKER_CONF:-${PRINTER_CFG_DIR}/moonraker.conf}"
 KLIPPER_SERVICE="${KLIPPER_SERVICE:-klipper}"
+MOONRAKER_SERVICE="${MOONRAKER_SERVICE:-moonraker}"
 REPO_DIR="${REPO_DIR:-$(cd "$(dirname "$0")" && pwd)}"
 REPO_URL="https://github.com/Eifel-Joe/Klipper-HA-Notify.git"
 
@@ -226,6 +227,7 @@ say "Printer-Cfg:   ${PRINTER_CFG_DIR}"
 say "Scripts:       ${SCRIPTS_DIR}"
 say "Moonraker:     ${MOONRAKER_CONF}"
 say "Klipper-Svc:   ${KLIPPER_SERVICE}"
+say "Moonraker-Svc: ${MOONRAKER_SERVICE}"
 hr
 say "${C_BOLD}Aktueller Zustand:${C_RESET}"
 echo ""
@@ -495,12 +497,18 @@ if [ "${S_MR}" != "no_moonraker" ] && [ "${S_MR}" != "present" ]; then
     fi
 fi
 
-# Klipper-Restart?
+# Klipper- und Moonraker-Restart?
 RESTART=0
+RESTART_MR=0
 if [ -n "${ACTIONS}" ]; then
     echo ""
     if [ "${AUTO_ALL}" = "1" ] || ask_yn "Klipper nach den Änderungen neu starten (sudo systemctl restart ${KLIPPER_SERVICE})" y; then
         RESTART=1
+    fi
+    if echo "${ACTIONS}" | grep -qw "mr"; then
+        if [ "${AUTO_ALL}" = "1" ] || ask_yn "Moonraker neu starten damit der Update-Manager aktiv wird (sudo systemctl restart ${MOONRAKER_SERVICE})" y; then
+            RESTART_MR=1
+        fi
     fi
 fi
 
@@ -583,11 +591,22 @@ EOF
     esac
 done
 
-if [ "${RESTART}" = "1" ]; then
+if [ "${RESTART}" = "1" ] || [ "${RESTART_MR}" = "1" ]; then
     echo ""
     if ! sudo -n true 2>/dev/null; then
-        warn "Für den Klipper-Restart wird sudo benötigt."
+        warn "Für den Neustart wird sudo benötigt."
     fi
+fi
+
+if [ "${RESTART_MR}" = "1" ]; then
+    if sudo systemctl restart "${MOONRAKER_SERVICE}"; then
+        ok "Moonraker-Service neu gestartet."
+    else
+        warn "Moonraker-Restart fehlgeschlagen — manuell prüfen: sudo systemctl status ${MOONRAKER_SERVICE}"
+    fi
+fi
+
+if [ "${RESTART}" = "1" ]; then
     if sudo systemctl restart "${KLIPPER_SERVICE}"; then
         ok "Klipper-Service neu gestartet."
     else
@@ -611,6 +630,7 @@ for _ACT in ${ACTIONS}; do
         mr)   say "  - [update_manager Klipper-HA-Notify] in moonraker.conf ergänzt (Backup: ${MOONRAKER_CONF}.bak.*)" ;;
     esac
 done
+[ "${RESTART_MR}" = "1" ] && say "  - Moonraker-Service neu gestartet."
 [ "${RESTART}" = "1" ] && say "  - Klipper-Service neu gestartet."
 echo ""
 say "${C_BOLD}Verwendung in Klipper-Macros:${C_RESET}"
