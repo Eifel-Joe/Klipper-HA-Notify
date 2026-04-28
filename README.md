@@ -4,7 +4,7 @@ Klipper-Extra das Push-Benachrichtigungen an iPhone/Android via **Home Assistant
 
 ## Voraussetzungen
 
-- Klipper mit Moonraker (Standard-Voron-Setup)
+- Klipper mit Moonraker
 - [Home Assistant](https://www.home-assistant.io/) im lokalen Netzwerk mit Companion App auf dem Smartphone
 - Python 3 auf dem Drucker-Pi (bereits vorhanden)
 
