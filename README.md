@@ -69,6 +69,29 @@ gcode:
     NOTIFY TITLE="Drucker - Abgebrochen" MESSAGE="Der Druck wurde abgebrochen"
 ```
 
+## Konfiguration: ha_notify.cfg
+
+Die Datei `~/printer_data/config/ha_notify.cfg` wird durch den Installer generiert und enthält die Konfiguration des Klipper-Extras:
+
+```ini
+[notify_ha]
+printer_name: Hulk
+```
+
+### Parameter
+
+| Parameter | Pflicht | Beschreibung |
+|-----------|---------|--------------|
+| `printer_name` | Nein | Name des Druckers, der als Titel verwendet wird wenn `NOTIFY` ohne `TITLE` aufgerufen wird. Fallback: `"Drucker"` |
+
+Der Druckername lässt sich jederzeit direkt in der Datei ändern:
+
+```bash
+nano ~/printer_data/config/ha_notify.cfg
+```
+
+Anschließend Firmware-Neustart in Mainsail/Fluidd.
+
 ## Sicherheit
 
 Die Datei `~/printer_data/scripts/klipper_ha_notify.conf` enthält den **Home Assistant Long-Lived Access Token** und wird vom Installer mit `chmod 600` abgesichert (nur für den eigenen Benutzer lesbar). Sie liegt bewusst außerhalb des Repos und wird nie per Git versioniert.
