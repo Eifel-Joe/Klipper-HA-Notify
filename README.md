@@ -14,7 +14,7 @@ Klipper-Extra das Push-Benachrichtigungen an iPhone/Android via **Home Assistant
 cd ~
 git clone https://github.com/Eifel-Joe/Klipper-HA-Notify.git
 cd Klipper-HA-Notify
-bash install.sh
+./install.sh
 ```
 
 Der Installer zeigt zunächst den aktuellen Installationsstatus aller Komponenten und führt dann die gewählten Schritte aus. Alle Schritte sind idempotent — ein erneutes Ausführen ist sicher.
